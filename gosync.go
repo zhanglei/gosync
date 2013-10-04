@@ -83,7 +83,7 @@ func handler(conn net.Conn) {
 		return
 	}
 
-	fileName := string(p)
+	fileName := string(p[:n])
 	f, err := os.Create(receivePath + "/" + fileName)
 	if err != nil {
 		com.ColorLog("[ERRO] S: Fail to create file[ %s ]\n", err)
@@ -140,7 +140,7 @@ func sendFile(host, fileName string) {
 		return
 	}
 
-	fileName = path.Base(fileName)
+	fileName = path.Base(strings.Replace(fileName, "\\", "/", -1))
 	com.ColorLog("[INFO] File name: %s; size: %dB\n", fileName, fi.Size())
 
 	conn, err := net.Dial("tcp", host)
@@ -166,14 +166,6 @@ func sendFile(host, fileName string) {
 	com.ColorLog("[SUCC] Header sent\n")
 
 	io.Copy(conn, f)
-	for {
-		buffer := make([]byte, 1024*200)
-		n, err := conn.Read(buffer)
-		if err == nil && n > 0 {
-			fmt.Println(string(buffer[:n]))
-			break
-		}
-	}
 	com.ColorLog("[SUCC] File sent\n")
 }
 
