@@ -17,7 +17,10 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/Unknwon/com"
@@ -37,7 +40,7 @@ func checkConfig() bool {
 	var err error
 	srcPath, err = com.GetSrcPath("github.com/Unknwon/gosync")
 	if err != nil {
-		com.ColorLog("[ERRO] Cannot find source path\n")
+		com.ColorLog("[ERRO] Fail to locate source path[ %s ]\n", err)
 		return false
 	}
 
@@ -68,8 +71,110 @@ func checkConfig() bool {
 	return true
 }
 
-func sendFile(host string) {
+func handler(conn net.Conn) {
+	defer conn.Close()
+	p := make([]byte, 1024)
+	n, err := conn.Read(p)
+	if err != nil {
+		com.ColorLog("[ERRO] S: Cannot read header[ %s ]\n", err)
+		return
+	} else if n == 0 {
+		com.ColorLog("[ERRO] S: Empty header\n")
+		return
+	}
 
+	fileName := string(p)
+	f, err := os.Create(receivePath + "/" + fileName)
+	if err != nil {
+		com.ColorLog("[ERRO] S: Fail to create file[ %s ]\n", err)
+		return
+	}
+	defer f.Close()
+
+	conn.Write([]byte("ok"))
+
+	io.Copy(f, conn)
+	for {
+		buffer := make([]byte, 1024*200)
+		n, err := conn.Read(buffer)
+		//blockSize := int64(n)
+		_ = n
+		if err != nil && err != io.EOF {
+			fmt.Println("cannot read", err)
+		} else if err == io.EOF {
+			break
+		}
+	}
+}
+
+func serve() {
+	l, err := net.Listen("tcp", cfg.MustValue("setting", "listen_addr"))
+	if err != nil {
+		com.ColorLog("[ERRO] Fail to start server[ %s ]\n", err)
+		os.Exit(2)
+	}
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			if ne, ok := err.(net.Error); !ok || !ne.Temporary() {
+				com.ColorLog("[ERRO] Network error[ %s ]\n", err)
+			}
+			continue
+		}
+		go handler(conn)
+	}
+}
+
+func sendFile(host, fileName string) {
+	f, err := os.Open(fileName)
+	if err != nil {
+		com.ColorLog("[ERRO] Fail to open file[ %s ]\n", err)
+		return
+	}
+	defer f.Close()
+
+	fi, err := os.Stat(fileName)
+	if err != nil {
+		com.ColorLog("[ERRO] Fail to stat file[ %s ]\n", err)
+		return
+	}
+
+	fileName = path.Base(fileName)
+	com.ColorLog("[INFO] File name: %s; size: %dB\n", fileName, fi.Size())
+
+	conn, err := net.Dial("tcp", host)
+	if err != nil {
+		com.ColorLog("[ERRO] Fail to establish connection[ %s ]\n", err)
+		return
+	}
+	defer conn.Close()
+
+	com.ColorLog("[SUCC] Connection established\n")
+
+	conn.Write([]byte(fileName))
+	p := make([]byte, 2)
+	_, err = conn.Read(p)
+	if err != nil {
+		com.ColorLog("[ERRO] Cannot get response from server[ %s ]\n", err)
+		return
+	} else if string(p) != "ok" {
+		com.ColorLog("[ERRO] Invalid response: %s\n", string(p))
+		return
+	}
+
+	com.ColorLog("[SUCC] Header sent\n")
+
+	io.Copy(conn, f)
+	for {
+		buffer := make([]byte, 1024*200)
+		n, err := conn.Read(buffer)
+		if err == nil && n > 0 {
+			fmt.Println(string(buffer[:n]))
+			break
+		}
+	}
+	com.ColorLog("[SUCC] File sent\n")
 }
 
 func watch() {
@@ -110,7 +215,7 @@ func watch() {
 					}
 
 					com.ColorLog("[INFO] File will be sent to %s\n", hosts[index-1])
-					sendFile(hosts[index-1])
+					sendFile(hosts[index-1], e.Name)
 					break
 				}
 			}
@@ -126,5 +231,6 @@ func main() {
 		os.Exit(2)
 	}
 
+	go serve()
 	watch()
 }
