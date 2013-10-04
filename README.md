@@ -5,6 +5,7 @@ gosync is a tool for syncing files and directories in different hosts.
 
 ## Credits
 
+- Blog post about how to accept and establish TCP connections: [gosync](http://www.ohlinux.com/archives/815/).
 
 ## License
 
