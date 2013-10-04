@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/Unknwon/com"
 	"github.com/Unknwon/goconfig"
@@ -177,8 +178,14 @@ func sendFile(host, fileName string) {
 
 	com.ColorLog("[SUCC] Header sent\n")
 
-	io.Copy(conn, f)
-	com.ColorLog("[SUCC] File sent\n")
+	start := time.Now()
+	_, err = io.Copy(conn, f)
+	if err != nil {
+		com.ColorLog("[ERRO] Fail to send file: %s\n", err)
+		return
+	}
+	spend := time.Since(start)
+	com.ColorLog("[SUCC] File sent, speed: %dKB/s\n", (fi.Size()*1000000000/int64(spend))/1024)
 }
 
 func watch() {
