@@ -36,12 +36,24 @@ var (
 	hosts       []string
 )
 
+const confTpl = `[setting]
+listen_addr=10.0.0.30:5000
+watch_path=watch
+receive_path=receive
+hosts=10.0.0.30:5000
+
+[move_case]`
+
 func checkConfig() bool {
 	var err error
 	srcPath, err = com.GetSrcPath("github.com/Unknwon/gosync")
 	if err != nil {
 		com.ColorLog("[ERRO] Fail to locate source path[ %s ]\n", err)
 		return false
+	}
+
+	if !com.IsExist(srcPath + "conf/app.ini") {
+		com.SaveFile(srcPath+"conf/app.ini", []byte(confTpl))
 	}
 
 	cfg, err = goconfig.LoadConfigFile(srcPath + "conf/app.ini")
